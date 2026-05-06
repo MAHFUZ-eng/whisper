@@ -5,6 +5,7 @@ import chatRoutes from "./routes/chatRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import userRoutes from "./routes/userRoutes";
 import { errorHandler } from "./middleware/errorHandler";
+import path from "path/win32";
 
 const app = express();
 
@@ -25,5 +26,13 @@ app.use("/api/users",userRoutes);
 // error handlers should be registered after all routes and other middleware so they can catch errors from them and pass them to next(err)
 app.use(errorHandler);
 
+
+if (process.env.NODE_ENV === "production") {
+    app.use(express.static(path.join(__dirname, "public")));
+
+    app.get("/{*any}", (req, res) => {
+        res.sendFile(path.join(__dirname, "../../web/dist/index.html"));
+    });
+}
 
 export default app;
