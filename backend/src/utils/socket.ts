@@ -18,12 +18,27 @@ export const initializeSocket = (httpServer: HttpServer) => {
     if (!clerkSecretKey) {
         throw new Error("CLERK_SECRET_KEY is not defined in environment variables");
     }
-    const allowedOrigins = ["http://localhost:8081", 
-        "http://localhost:5173",
-        process.env.FRONTEND_URL,//production
-    ].filter(Boolean) as string[];
-
-       const io = new SocketServer(httpServer, {cors: {origin: allowedOrigins}});
+    const io = new SocketServer(httpServer, {
+        cors: {
+            origin: (origin, callback) => {
+                // Allow any localhost port in development
+                if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
+                    callback(null, true);
+                } else {
+                    const allowedOrigins = [
+                        "http://localhost:8081",
+                        process.env.FRONTEND_URL,
+                    ].filter(Boolean) as string[];
+                    
+                    if (allowedOrigins.includes(origin)) {
+                        callback(null, true);
+                    } else {
+                        callback(new Error("Not allowed by CORS"));
+                    }
+                }
+            }
+        }
+    });
  // verify
     io.use(async (socket, next) => {
         const token = socket.handshake.auth.token;

@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { clerkMiddleware } from '@clerk/express'
 import authRoutes from "./routes/authRoutes";
 import chatRoutes from "./routes/chatRoutes";
@@ -8,9 +9,27 @@ import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
 
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow any localhost port in development
+        if (!origin || /^http:\/\/localhost:\d+$/.test(origin)) {
+            callback(null, true);
+        } else {
+            const allowedOrigins = [
+                "http://localhost:8081",
+                process.env.FRONTEND_URL,
+            ].filter(Boolean) as string[];
+            
+            if (allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error("Not allowed by CORS"));
+            }
+        }
+    }
+}));
+
 app.use(express.json()); // parses incoming JSON requests and puts the parsed data in req.body
-
-
 app.use(clerkMiddleware())
 
 app.get("/health", (req, res) => {
