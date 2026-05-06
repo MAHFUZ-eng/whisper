@@ -5,10 +5,10 @@ import { Message } from "../models/Message";
 import { User } from "../models/User";
 import { Chat } from "../models/Chat";
 
-
 interface SocketWithUserId extends Socket {
-    userId: string;
+    userId : string;
 }
+
 // store inline users in memory for now
 export const onlineUsers :Map <string,string>= new Map();
 
@@ -19,8 +19,8 @@ export const initializeSocket = (httpServer: HttpServer) => {
 
     const allowedOrigins = ["http://localhost:8081", 
         "http://localhost:5173",
-        process.env.FRONTEND_URL as string,//production
-    ];
+        process.env.FRONTEND_URL,//production
+    ].filter(Boolean) as string[];
 
        const io = new SocketServer(httpServer, {cors: {origin: allowedOrigins}});
 
@@ -59,10 +59,14 @@ export const initializeSocket = (httpServer: HttpServer) => {
 
         socket.join(`user:${userId}`);
 
-
-        socket.on("join-chat",(chatId:string)=>{
+        socket.on("join-chat", async (chatId: string) => {
+           const chat = await Chat.findOne({ _id: chatId, participants: userId });
+            if (!chat) {
+                socket.emit("Socket error", { message: "Chat not found or access denied" });
+                return;
+            }
             socket.join(`chat:${chatId}`);
-        });
+       });
          socket.on("leave-chat",(chatId:string)=>{
             socket.leave(`chat:${chatId}`);
         });
@@ -70,8 +74,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
         socket.on("send-message", async (data: { chatId: string,text: string }) => {
             try {
                 const { chatId, text } = data;
-                const chat = await Chat.findById({
-
+                const chat = await Chat.findOne({
                     _id: chatId,
                     participants: userId,
                 });
@@ -92,13 +95,8 @@ export const initializeSocket = (httpServer: HttpServer) => {
 
                 await message.populate("sender", "name email avatar");
 
-
-                io.to(`chat:${chatId}`).emit("new-message", {message});
-
-
-
                 for (const participantId of chat.participants) {
-                    io.to(`user:${participantId}`).emit("new-message", message);
+                    io.to(`user:${participantId}`).emit("new-message", {message});
                 }
             }catch (error) {
                 socket.emit("Socket error", { message: "Failed to send message" });
