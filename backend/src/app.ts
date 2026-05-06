@@ -37,16 +37,16 @@ app.use("/api/chats", chatRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/users", userRoutes);
 
-// error handlers must come after all the routes and other middlewares so they can catch errors passed with next(err) or thrown inside async handlers.
+// Serve frontend static files
+const distPath = path.resolve(__dirname, "../../web/dist");
+app.use(express.static(distPath));
+
+// Fallback route to serve the React app for any non-API requests
+app.get("*", (req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
+
+// error handlers must come after all the routes
 app.use(errorHandler);
-
-// serve frontend in production
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../../web/dist")));
-
-  app.get("*", (_, res) => {
-    res.sendFile(path.join(__dirname, "../../web/dist/index.html"));
-  });
-}
 
 export default app;
