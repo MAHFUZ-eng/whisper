@@ -45,9 +45,6 @@ export const initializeSocket = (httpServer: HttpServer) => {
         }
     });
 
-
-
- const onlineUsers: Map<string, Set<string>> = new Map();
     io.on("connection", (socket) => {
         const userId = (socket as SocketWithUserId).userId;
        const sockets = onlineUsers.get(userId) ?? new Set<string>();
@@ -65,7 +62,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
          socket.on("leave-chat",(chatId:string)=>{
             socket.leave(`chat:${chatId}`);
         });
-+socket.on("join-chat", async (chatId: string) => {
+socket.on("join-chat", async (chatId: string) => {
   try {
     const chat = await Chat.findOne({ _id: chatId, participants: userId });
     if (!chat) {
