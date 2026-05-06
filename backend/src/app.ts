@@ -42,7 +42,7 @@ const distPath = path.resolve(__dirname, "../../web/dist");
 app.use(express.static(distPath));
 
 // Fallback route to serve the React app for any non-API requests
-app.get("*", (req, res) => {
+app.get("(.*)", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
