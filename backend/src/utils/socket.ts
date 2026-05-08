@@ -19,7 +19,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
         throw new Error("CLERK_SECRET_KEY is not defined in environment variables");
     }
     const allowedOrigins = ["http://localhost:8081", 
-        "http://localhost:5173",
+        "http://localhost:5174",
         process.env.FRONTEND_URL,//production
     ].filter(Boolean) as string[];
 
@@ -107,7 +107,10 @@ socket.on("join-chat", async (chatId: string) => {
           });
 
 
-          socket.on("typing", async (data) => {});
+          socket.on("typing", async (data: { chatId: string; isTyping: boolean }) => {
+              const { chatId, isTyping } = data;
+              socket.to(`chat:${chatId}`).emit("typing", { userId, isTyping });
+          });
 
 
           socket.on("disconnect",()=>{
