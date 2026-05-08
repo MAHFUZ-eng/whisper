@@ -6,6 +6,8 @@ export interface Iuser extends Document {
     password?: string;
     name: string;
     avatar: string;
+    lastSeen: Date;
+    pushToken?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -16,6 +18,8 @@ clerkId: { type: String, required: true, unique: true },
     password: { type: String, select: false },
     name: { type: String, required: true, trim: true },
     avatar: { type: String, default: "" },
+    lastSeen: { type: Date, default: Date.now },
+    pushToken: { type: String, default: null },
 },{
     timestamps: true,
 }

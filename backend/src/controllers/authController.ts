@@ -44,3 +44,21 @@ export async function authCallback(req: Request, res: Response, next: NextFuncti
         next(error);
     }
 }
+
+export async function savePushToken(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+        const userId = req.userId;
+        const { pushToken } = req.body as { pushToken: string };
+
+        if (!pushToken) {
+            res.status(400).json({ message: "pushToken is required" });
+            return;
+        }
+
+        await User.findByIdAndUpdate(userId, { pushToken });
+        res.status(200).json({ success: true });
+    } catch (error) {
+        res.status(500);
+        next(error);
+    }
+}

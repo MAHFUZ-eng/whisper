@@ -1,17 +1,23 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Whisper",
+    "slug": "whisper",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "whisper",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Whisper needs microphone access for voice and video calls.",
+        "NSCameraUsageDescription": "Whisper needs camera access for video calls."
+      }
     },
     "android": {
+      "package": "com.mahfuzasif.whisper",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,7 +25,14 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_CONNECT"
+      ]
     },
     "web": {
       "output": "static",
@@ -27,6 +40,7 @@
     },
     "plugins": [
       "expo-router",
+      "react-native-agora",
       [
         "expo-splash-screen",
         {
@@ -38,8 +52,23 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      "@sentry/react-native",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#F4A261",
+          "defaultChannel": "messages",
+          "sounds": []
+        }
       ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": "your-expo-project-id"
+      }
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

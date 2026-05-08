@@ -1,14 +1,11 @@
 import { Router } from "express";
-import { authCallback, getMe } from "../controllers/authController";
+import { authCallback, getMe, savePushToken } from "../controllers/authController";
 import { protectRoute } from "../middleware/auth";
-
 
 const router = Router();
 
-// Placeholder for authentication routes
-
-router.get("/me",protectRoute,getMe);
-router.post("/callback",authCallback);
-
+router.get("/me", protectRoute, getMe);
+router.post("/callback", authCallback);
+router.post("/push-token", protectRoute, savePushToken);
 
 export default router;
