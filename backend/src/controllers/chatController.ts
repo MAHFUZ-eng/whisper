@@ -7,10 +7,10 @@ export async function getChats(req:AuthRequest,res:Response,next:NextFunction) {
     try {
         const userId = req.userId;
         const chats = await Chat.find({ participants: userId }).populate(
-            "participant",
+            "participants",
             "name email avatar"
         ).populate("lastmessage")
-        .sort({lastMessageAt:-1})
+        .sort({lastmessageAt:-1})
 
 
        const formattedChats = chats.map(chat => {
@@ -67,9 +67,9 @@ export async function getOrCreateChat(req:AuthRequest,res:Response,next:NextFunc
         const otherParticipant = chat.participants.find((p: any) => p._id.toString() !== userId);
 
         res.json({
-            __id: chat._id,
+            _id: chat._id,
             participantId: otherParticipant ?? null,
-            letmessage: chat.lastmessage,
+            lastmessage: chat.lastmessage,
             lastmessageAt: chat.lastmessageAt,
             createdAt: chat.createdAt,
         });
