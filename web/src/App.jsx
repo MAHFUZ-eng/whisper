@@ -56,6 +56,12 @@ function ChatApp() {
   const [search, setSearch] = useState('');
   const [myDbUser, setMyDbUser] = useState(null);
   const [lastSeenMap, setLastSeenMap] = useState(new Map());
+  
+  // New chat modal
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -199,6 +205,35 @@ function ChatApp() {
     ? chats.filter(c => c.participant.name.toLowerCase().includes(search.toLowerCase()))
     : chats;
 
+  const filteredUsers = userSearch.trim()
+    ? allUsers.filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+    : allUsers;
+
+  const openNewChat = async () => {
+    setShowNewChat(true);
+    setLoadingUsers(true);
+    try {
+      const res = await apiCall(tokenRef.current, 'GET', '/users');
+      setAllUsers(res.data.filter(u => u._id !== myDbUser?._id));
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingUsers(false);
+  };
+
+  const startChat = async (user) => {
+    try {
+      const res = await apiCall(tokenRef.current, 'POST', `/chats/with/${user._id}`);
+      const chat = res.data;
+      setChats(prev => prev.find(c => c._id === chat._id) ? prev : [chat, ...prev]);
+      setActiveChatId(chat._id);
+      setShowNewChat(false);
+      setUserSearch('');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const isTyping = activeChatId ? typingUsers.get(activeChatId) === activeChat?.participant?._id : false;
 
   // Build list with date separators
@@ -222,8 +257,11 @@ function ChatApp() {
     <div className="app-shell">
       {/* ── Sidebar ─────────────────────────────────────────────── */}
       <div className="sidebar">
-        <div className="sidebar-header">
+        <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2>Chats</h2>
+          <button onClick={openNewChat} style={{ background: 'var(--primary)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            +
+          </button>
         </div>
         <div className="sidebar-search">
           <div className="search-input-wrap">
@@ -423,6 +461,37 @@ function ChatApp() {
               </>
             )}
             <button className="ctx-action" onClick={() => setCtxMsg(null)}>Cancel</button>
+          </div>
+        </div>
+      {/* ── New Chat Modal ────────────────────────────────────────── */}
+      {showNewChat && (
+        <div className="ctx-overlay" onClick={() => setShowNewChat(false)} style={{ alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div className="ctx-menu" onClick={e => e.stopPropagation()} style={{ width: 400, maxWidth: '100%', borderRadius: 16, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, color: '#fff' }}>Start a New Chat</h3>
+              <button onClick={() => setShowNewChat(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>×</button>
+            </div>
+            
+            <div className="search-input-wrap" style={{ margin: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input placeholder="Search users by name..." value={userSearch} onChange={e => setUserSearch(e.target.value)} autoFocus />
+            </div>
+
+            <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {loadingUsers ? (
+                <div className="loader"><div className="spinner" /></div>
+              ) : filteredUsers.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>No users found</div>
+              ) : filteredUsers.map(u => (
+                <div key={u._id} onClick={() => startChat(u)} className="chat-item" style={{ borderRadius: 12 }}>
+                  <div className="chat-item-avatar"><img src={u.avatar} alt={u.name} /></div>
+                  <div className="chat-item-info">
+                    <span className="chat-item-name">{u.name}</span>
+                    <div className="chat-item-preview">{u.email}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
