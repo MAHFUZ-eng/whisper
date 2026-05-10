@@ -1,9 +1,11 @@
 import { Message, MessageReaction } from "@/types";
 import { View, Text, Pressable, Modal, TouchableOpacity, Alert } from "react-native";
+import { Image } from "expo-image";
 import { format } from "date-fns";
 import { Ionicons } from "@expo/vector-icons";
 import { useRef, useState } from "react";
 import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import { useSocketStore } from "@/lib/socket";
 
 const EMOJI_OPTIONS = ["❤️", "😂", "👍", "😮", "😢", "🔥"];
@@ -67,6 +69,7 @@ function MessageBubble({
   const isOptimistic = message._id.startsWith("temp-");
   const isDeleted = message.isDeleted;
   const isSystem = message.type === "system";
+  const isMedia = message.type === "media" || !!message.mediaUrl;
 
   // ── System message (e.g. Missed call) ─────────────────────────
   if (isSystem) {
@@ -80,7 +83,10 @@ function MessageBubble({
     );
   }
 
-  const handleLongPress = () => setMenuVisible(true);
+  const handleLongPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMenuVisible(true);
+  };
 
   const handleCopy = async () => {
     await Clipboard.setStringAsync(message.text);
@@ -98,9 +104,14 @@ function MessageBubble({
   };
 
   const handleReact = (emoji: string) => {
+    Haptics.selectionAsync();
     reactMessage(message._id, message.chat, emoji);
     setMenuVisible(false);
   };
+
+  // ── Read-tick colour ───────────────────────────────────────────
+  // Blue double-tick = read, grey double-tick = delivered, clock = sending
+  const tickColor = isRead ? "#60A5FA" : "rgba(13,13,15,0.5)";
 
   return (
     <>
@@ -144,7 +155,7 @@ function MessageBubble({
                 : isFromMe
                 ? "bg-primary rounded-br-sm"
                 : "bg-surface-card rounded-bl-sm border border-surface-light"
-            } ${message.replyTo ? "rounded-t-none" : ""}`}
+            } ${message.replyTo ? "rounded-t-none" : ""} ${isMedia ? "px-1.5 pt-1.5 pb-1.5" : ""}`}
           >
             {isDeleted ? (
               <View className="flex-row items-center gap-1.5">
@@ -152,6 +163,37 @@ function MessageBubble({
                 <Text className="text-subtle-foreground text-sm italic">
                   This message was deleted
                 </Text>
+              </View>
+            ) : isMedia && message.mediaUrl ? (
+              // ── Image message ─────────────────────────────────────
+              <View>
+                <Image
+                  source={{ uri: message.mediaUrl }}
+                  style={{ width: 220, height: 220, borderRadius: 14 }}
+                  contentFit="cover"
+                />
+                {/* Timestamp overlay on image */}
+                <View
+                  className={`flex-row items-center mt-0.5 gap-1 ${isFromMe ? "justify-end" : "justify-start"}`}
+                >
+                  <Text
+                    className={`text-[10px] ${isFromMe ? "text-surface-dark/60" : "text-subtle-foreground"}`}
+                  >
+                    {timeStr}
+                  </Text>
+                  {isFromMe && !isDeleted && (
+                    <View className="flex-row">
+                      {isOptimistic ? (
+                        <Ionicons name="time-outline" size={11} color="rgba(13,13,15,0.5)" />
+                      ) : (
+                        <View className="flex-row" style={{ gap: -3 }}>
+                          <Ionicons name="checkmark" size={12} color={tickColor} />
+                          <Ionicons name="checkmark" size={12} color={tickColor} />
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
               </View>
             ) : (
               <Text
@@ -163,37 +205,41 @@ function MessageBubble({
               </Text>
             )}
 
-            {/* Timestamp + status */}
-            <View
-              className={`flex-row items-center mt-0.5 gap-1 ${
-                isFromMe ? "justify-end" : "justify-start"
-              }`}
-            >
-              <Text
-                className={`text-[10px] ${
-                  isFromMe ? "text-surface-dark/60" : "text-subtle-foreground"
+            {/* Timestamp + status (text messages) */}
+            {!isMedia && (
+              <View
+                className={`flex-row items-center mt-0.5 gap-1 ${
+                  isFromMe ? "justify-end" : "justify-start"
                 }`}
               >
-                {timeStr}
-              </Text>
-              {isFromMe && !isDeleted && (
-                <View className="flex-row">
-                  {isOptimistic ? (
-                    <Ionicons name="time-outline" size={11} color="rgba(13,13,15,0.5)" />
-                  ) : isRead ? (
-                    <View className="flex-row" style={{ gap: -3 }}>
-                      <Ionicons name="checkmark" size={12} color="#E76F51" />
-                      <Ionicons name="checkmark" size={12} color="#E76F51" />
-                    </View>
-                  ) : (
-                    <View className="flex-row" style={{ gap: -3 }}>
-                      <Ionicons name="checkmark" size={12} color="rgba(13,13,15,0.5)" />
-                      <Ionicons name="checkmark" size={12} color="rgba(13,13,15,0.5)" />
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
+                <Text
+                  className={`text-[10px] ${
+                    isFromMe ? "text-surface-dark/60" : "text-subtle-foreground"
+                  }`}
+                >
+                  {timeStr}
+                </Text>
+                {isFromMe && !isDeleted && (
+                  <View className="flex-row">
+                    {isOptimistic ? (
+                      <Ionicons name="time-outline" size={11} color="rgba(13,13,15,0.5)" />
+                    ) : isRead ? (
+                      // ✓✓ Blue = read
+                      <View className="flex-row" style={{ gap: -3 }}>
+                        <Ionicons name="checkmark" size={12} color="#60A5FA" />
+                        <Ionicons name="checkmark" size={12} color="#60A5FA" />
+                      </View>
+                    ) : (
+                      // ✓✓ Grey = delivered
+                      <View className="flex-row" style={{ gap: -3 }}>
+                        <Ionicons name="checkmark" size={12} color="rgba(13,13,15,0.5)" />
+                        <Ionicons name="checkmark" size={12} color="rgba(13,13,15,0.5)" />
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
           </Pressable>
 
           {/* Reactions */}
@@ -226,7 +272,7 @@ function MessageBubble({
             )}
 
             {/* Actions */}
-            {!isDeleted && (
+            {!isDeleted && !isMedia && (
               <>
                 <TouchableOpacity
                   onPress={handleReply}
@@ -244,6 +290,16 @@ function MessageBubble({
                   <Text className="text-foreground ml-3 font-medium">Copy</Text>
                 </TouchableOpacity>
               </>
+            )}
+
+            {!isDeleted && isMedia && (
+              <TouchableOpacity
+                onPress={handleReply}
+                className="flex-row items-center px-4 py-3.5 border-b border-surface-light"
+              >
+                <Ionicons name="return-up-back-outline" size={20} color="#F4A261" />
+                <Text className="text-foreground ml-3 font-medium">Reply</Text>
+              </TouchableOpacity>
             )}
 
             {isFromMe && !isDeleted && (

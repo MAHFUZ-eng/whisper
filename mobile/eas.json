@@ -5,12 +5,18 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_AGORA_APP_ID": "aabe5622d39e4a32aaaf52fcdaa4fbd9"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_AGORA_APP_ID": "aabe5622d39e4a32aaaf52fcdaa4fbd9"
       }
     },
     "production": {

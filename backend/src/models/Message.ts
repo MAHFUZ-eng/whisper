@@ -15,10 +15,13 @@ export interface IMessage extends Document {
   sender: mongoose.Types.ObjectId;
   chat: mongoose.Types.ObjectId;
   text: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "video" | "audio";
   replyTo?: IReplyTo;
   isDeleted: boolean;
   reactions: IReaction[];
-  type: "text" | "system";
+  type: "text" | "system" | "media";
+  readBy: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,7 +30,9 @@ const MessageSchema = new Schema<IMessage>(
   {
     sender: { type: Schema.Types.ObjectId, ref: "User", required: true },
     chat: { type: Schema.Types.ObjectId, ref: "Chat", required: true },
-    text: { type: String, required: true, trim: true },
+    text: { type: String, default: "", trim: true },
+    mediaUrl: { type: String, default: null },
+    mediaType: { type: String, enum: ["image", "video", "audio"], default: null },
     replyTo: {
       _id: { type: Schema.Types.ObjectId },
       text: { type: String },
@@ -40,7 +45,8 @@ const MessageSchema = new Schema<IMessage>(
         userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
       },
     ],
-    type: { type: String, enum: ["text", "system"], default: "text" },
+    type: { type: String, enum: ["text", "system", "media"], default: "text" },
+    readBy: [{ type: Schema.Types.ObjectId, ref: "User", default: [] }],
   },
   { timestamps: true }
 );

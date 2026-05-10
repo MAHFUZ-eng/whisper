@@ -14,9 +14,11 @@ import {
   VideoSourceType,
 } from "react-native-agora";
 import { useSocketStore } from "@/lib/socket";
+import { useApi } from "@/lib/axios";
 
 const isExpoGo = Constants.appOwnership === "expo";
 const APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID!;
+
 
 // How long the caller waits before auto-cancelling (Messenger = 60s, Telegram = ~30s)
 const CALL_TIMEOUT_MS = 45_000;
@@ -74,6 +76,8 @@ export default function CallScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const { cancelCall, endCall } = useSocketStore();
+  const { apiWithAuth } = useApi();
+
 
   // ── Pulse animation while waiting ─────────────────────────────────
   useEffect(() => {
@@ -139,7 +143,21 @@ export default function CallScreen() {
   // ── Init Agora + socket listeners ─────────────────────────────────
   useEffect(() => {
     const init = async () => {
+
       try {
+        // ── Fetch secure Agora RTC token from backend ──────────────
+        let agoraToken = "";
+        try {
+          const { data } = await apiWithAuth<{ token: string; uid: number; appId: string }>({
+            method: "POST",
+            url: "/agora/token",
+            data: { channelName: callId, uid: 0 },
+          });
+          agoraToken = data.token;
+        } catch (tokenErr) {
+          console.warn("Could not fetch Agora token, falling back to empty token:", tokenErr);
+        }
+
         const engine = createAgoraRtcEngine();
         engineRef.current = engine;
 
@@ -167,13 +185,14 @@ export default function CallScreen() {
           engine.disableVideo();
         }
         engine.setEnableSpeakerphone(true);
-        engine.joinChannel("", callId, 0, {
+        engine.joinChannel(agoraToken, callId, 0, {
           clientRoleType: ClientRoleType.ClientRoleBroadcaster,
         });
       } catch (err) {
         console.error("Agora init failed:", err);
       }
     };
+
 
     init();
 

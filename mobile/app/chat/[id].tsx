@@ -22,6 +22,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { format, isToday, isYesterday, isSameDay, formatDistanceToNow } from "date-fns";
 import { GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
+import * as ImagePicker from "expo-image-picker";
+import * as Haptics from "expo-haptics";
 
 type ChatParams = {
   id: string;
@@ -127,8 +129,9 @@ function SwipeableMessage({
       rightThreshold={40}
       renderLeftActions={!isFromMe ? renderLeftAction : undefined}
       renderRightActions={isFromMe ? renderRightAction : undefined}
-      onSwipeableOpen={(direction) => {
+      onSwipeableOpen={() => {
         swipeableRef.current?.close();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onSwipeReply();
       }}
     >
@@ -169,9 +172,18 @@ const ChatDetailScreen = () => {
 
   const flatListRef = useRef<FlatList>(null);
   const { data: currentUser } = useCurrentUser();
-  const { data: messages, isLoading } = useMessages(chatId);
   const {
-    joinChat, leaveChat, sendMessage, sendTyping,
+    data: queryData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useMessages(chatId);
+
+  const messages = queryData?.messages ?? [];
+
+  const {
+    joinChat, leaveChat, sendMessage, sendMedia, sendTyping, markRead,
     isConnected, onlineUsers, typingUsers, lastSeenMap, initiateCall,
   } = useSocketStore();
 
@@ -191,9 +203,20 @@ const ChatDetailScreen = () => {
   }
 
   useEffect(() => {
-    if (chatId && isConnected) joinChat(chatId);
+    if (chatId && isConnected) {
+      joinChat(chatId);
+      // Emit read receipt on entering the chat
+      markRead(chatId);
+    }
     return () => { if (chatId) leaveChat(chatId); };
-  }, [chatId, isConnected, joinChat, leaveChat]);
+  }, [chatId, isConnected, joinChat, leaveChat, markRead]);
+
+  // Mark as read whenever new messages arrive while in this chat
+  useEffect(() => {
+    if (messages.length > 0 && isConnected) {
+      markRead(chatId);
+    }
+  }, [messages.length, chatId, isConnected, markRead]);
 
   const scrollToBottom = useCallback((animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
@@ -225,6 +248,7 @@ const ChatDetailScreen = () => {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     sendTyping(chatId, false);
     setIsSending(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     sendMessage(
       chatId,
       messageText.trim(),
@@ -237,15 +261,40 @@ const ChatDetailScreen = () => {
     setTimeout(() => scrollToBottom(), 100);
   };
 
+  // ── Image picker ──────────────────────────────────────────────────
+  const handlePickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+      allowsEditing: false,
+    });
+
+    if (result.canceled || !result.assets[0] || !currentUser) return;
+
+    const asset = result.assets[0];
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    sendMedia(
+      chatId,
+      asset.uri,
+      "image",
+      { _id: currentUser._id, name: currentUser.name, email: currentUser.email, avatar: currentUser.avatar }
+    );
+    setTimeout(() => scrollToBottom(), 100);
+  };
+
   const handleReply = useCallback((msg: Message) => {
     const sender = msg.sender as MessageSender;
+    Haptics.selectionAsync();
     setReplyTo({ _id: msg._id, text: msg.text, senderName: sender.name ?? "Someone" });
   }, []);
 
   // Filter by search
   const filteredMessages = searchQuery.trim()
-    ? (messages ?? []).filter((m) => m.text.toLowerCase().includes(searchQuery.toLowerCase()))
-    : messages ?? [];
+    ? messages.filter((m) => m.text.toLowerCase().includes(searchQuery.toLowerCase()))
+    : messages;
 
   const listItems = buildListItems(filteredMessages);
   const listData: ListItem[] = isTyping && !searchQuery
@@ -342,18 +391,32 @@ const ChatDetailScreen = () => {
                 contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 4 }}
                 showsVerticalScrollIndicator={false}
                 onContentSizeChange={() => scrollToBottom(false)}
+                // ── Pagination: load older messages when reaching top ──
+                onStartReached={() => {
+                  if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+                }}
+                onStartReachedThreshold={0.2}
+                ListHeaderComponent={
+                  isFetchingNextPage ? (
+                    <View className="py-2 items-center">
+                      <ActivityIndicator size="small" color="#F4A261" />
+                    </View>
+                  ) : null
+                }
                 renderItem={({ item }) => {
                   if (item.type === "separator") return <DateSeparator date={(item as any).date} />;
                   if (item.type === "typing") return <TypingIndicator />;
                   const msg = (item as { type: "message"; data: Message }).data;
                   const senderId = (msg.sender as MessageSender)._id;
                   const isFromMe = currentUser ? senderId === currentUser._id : false;
+                  // isRead = the participant has read the message (their id is in readBy)
+                  const isRead = isFromMe && (msg.readBy?.includes(participantId) ?? false);
                   return (
                     <SwipeableMessage isFromMe={isFromMe} onSwipeReply={() => handleReply(msg)}>
                       <MessageBubble
                         message={msg}
                         isFromMe={isFromMe}
-                        isRead={false}
+                        isRead={isRead}
                         currentUserId={currentUser?._id ?? ""}
                         onReply={handleReply}
                       />
@@ -371,8 +434,11 @@ const ChatDetailScreen = () => {
             {/* ── Input bar ─────────────────────────────────────── */}
             <View className="px-3 pb-3 pt-2 bg-surface border-t border-surface-light">
               <View className="flex-row items-end bg-surface-card rounded-3xl px-3 py-1.5 gap-2">
-                <Pressable className="w-8 h-8 rounded-full items-center justify-center">
-                  <Ionicons name="add" size={22} color="#F4A261" />
+                <Pressable
+                  className="w-8 h-8 rounded-full items-center justify-center"
+                  onPress={handlePickImage}
+                >
+                  <Ionicons name="image-outline" size={22} color="#F4A261" />
                 </Pressable>
                 <TextInput
                   placeholder="Message"

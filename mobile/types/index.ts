@@ -29,10 +29,14 @@ export interface Message {
   chat: string;
   sender: MessageSender | string;
   text: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "video" | "audio";
   replyTo?: ReplyTo;
   isDeleted?: boolean;
   reactions?: MessageReaction[];
-  type?: "text" | "system";
+  type?: "text" | "system" | "media";
+  /** Array of user IDs who have read this message */
+  readBy?: string[];
   createdAt: string;
   updatedAt: string;
 }

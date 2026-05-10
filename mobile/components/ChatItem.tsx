@@ -64,11 +64,9 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
             )}
           </View>
 
-          {/* Unread count badge */}
+          {/* Unread badge — filled circle with bold dot */}
           {hasUnread && (
-            <View className="min-w-[20px] h-5 bg-primary rounded-full items-center justify-center px-1.5">
-              <Text className="text-surface-dark text-[10px] font-bold">●</Text>
-            </View>
+            <View className="w-2.5 h-2.5 bg-primary rounded-full" />
           )}
         </View>
       </View>

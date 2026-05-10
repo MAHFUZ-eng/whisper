@@ -14,8 +14,8 @@ import { registerForPushNotifications, configureForegroundNotifications } from "
 export default function NotificationSetup() {
   const { isSignedIn } = useAuth();
   const { apiWithAuth } = useApi();
-  const notificationListener = useRef<Notifications.EventSubscription>();
-  const responseListener = useRef<Notifications.EventSubscription>();
+  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
+  const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
   // Register token once when user signs in
   useEffect(() => {

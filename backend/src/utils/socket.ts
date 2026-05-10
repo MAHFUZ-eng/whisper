@@ -1,6 +1,7 @@
 import { Socket, Server as SocketServer } from "socket.io";
 import { Server as HttpServer } from "http";
 import { verifyToken } from "@clerk/express";
+import mongoose from "mongoose";
 import { Message } from "../models/Message";
 import { User } from "../models/User";
 import { Chat } from "../models/Chat";
@@ -82,10 +83,12 @@ export const initializeSocket = (httpServer: HttpServer) => {
         chatId: string;
         text: string;
         replyTo?: { _id: string; text: string; senderName: string };
-        type?: "text" | "system";
+        type?: "text" | "system" | "media";
+        mediaUrl?: string;
+        mediaType?: "image" | "video" | "audio";
       }) => {
         try {
-          const { chatId, text, replyTo, type = "text" } = data;
+          const { chatId, text, replyTo, type = "text", mediaUrl, mediaType } = data;
 
           const chat = await Chat.findOne({ _id: chatId, participants: userId });
           if (!chat) {
@@ -93,13 +96,17 @@ export const initializeSocket = (httpServer: HttpServer) => {
             return;
           }
 
-          const message = await Message.create({
+          const message = new Message({
             chat: chatId,
             sender: userId,
-            text,
+            text: text || "",
             ...(replyTo && { replyTo }),
             type,
+            ...(mediaUrl && { mediaUrl }),
+            ...(mediaType && { mediaType }),
+            readBy: [new mongoose.Types.ObjectId(userId)],
           });
+          await message.save();
 
           chat.lastmessage = message._id;
           chat.lastmessageAt = new Date();
@@ -119,7 +126,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
                 await sendPushNotification({
                   to: recipient.pushToken,
                   title: senderName,
-                  body: message.isDeleted ? "Deleted a message" : message.text,
+                  body: message.isDeleted ? "Deleted a message" : message.text || "📷 Media",
                   data: {
                     screen: "chat",
                     chatId: chatId,
@@ -139,6 +146,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
         }
       }
     );
+
 
     // ── Delete message ────────────────────────────────────────────
     socket.on(
@@ -224,6 +232,36 @@ export const initializeSocket = (httpServer: HttpServer) => {
       const { chatId, isTyping } = data;
       socket.to(`chat:${chatId}`).emit("typing", { userId, chatId, isTyping });
     });
+
+    // ── Mark messages as read ─────────────────────────────────────
+    socket.on("message-read", async (data: { chatId: string }) => {
+      try {
+        const { chatId } = data;
+        const chat = await Chat.findOne({ _id: chatId, participants: userId });
+        if (!chat) return;
+
+        // Mark all unread messages from others as read by current user
+        await Message.updateMany(
+          {
+            chat: chatId,
+            sender: { $ne: userId },
+            readBy: { $ne: userId },
+          },
+          { $addToSet: { readBy: userId } }
+        );
+
+        // Notify the other participant(s) so their sent ticks turn blue
+        for (const participantId of chat.participants) {
+          const pid = participantId.toString();
+          if (pid !== userId) {
+            io.to(`user:${pid}`).emit("messages-read", { chatId, readerId: userId });
+          }
+        }
+      } catch {
+        // non-critical — silently ignore
+      }
+    });
+
 
     // ── Call Signaling ────────────────────────────────────────────
     socket.on(

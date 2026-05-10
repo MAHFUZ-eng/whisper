@@ -35,9 +35,16 @@ interface SocketState {
     currentUser: MessageSender,
     replyTo?: { _id: string; text: string; senderName: string }
   ) => void;
+  sendMedia: (
+    chatId: string,
+    mediaUrl: string,
+    mediaType: "image" | "video" | "audio",
+    currentUser: MessageSender
+  ) => void;
   deleteMessage: (messageId: string, chatId: string, deleteFor: "me" | "everyone") => void;
   reactMessage: (messageId: string, chatId: string, emoji: string) => void;
   sendTyping: (chatId: string, isTyping: boolean) => void;
+  markRead: (chatId: string) => void;
   initiateCall: (
     recipientId: string,
     callType: "audio" | "video",
@@ -106,11 +113,20 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       const senderId = (message.sender as MessageSender)._id;
       const { currentChatId } = get();
 
-      queryClient.setQueryData<Message[]>(["messages", message.chat], (old) => {
-        if (!old) return [message];
-        const filtered = old.filter((m) => !m._id.startsWith("temp-"));
-        if (filtered.some((m) => m._id === message._id)) return filtered;
-        return [...filtered, message];
+      // useMessages uses useInfiniteQuery — data shape is { pages: Message[][], pageParams: ... }
+      type InfiniteData = { pages: Message[][]; pageParams: (string | undefined)[] };
+      queryClient.setQueryData<InfiniteData>(["messages", message.chat], (old) => {
+        if (!old) {
+          return { pages: [[message]], pageParams: [undefined] };
+        }
+        // Remove optimistic temp message and deduplicate, then append to last page
+        const lastPage = old.pages[old.pages.length - 1] ?? [];
+        const filtered = lastPage.filter(
+          (m) => !m._id.startsWith("temp-") && m._id !== message._id
+        );
+        const newLastPage = [...filtered, message];
+        const newPages = [...old.pages.slice(0, -1), newLastPage];
+        return { pages: newPages, pageParams: old.pageParams };
       });
 
       queryClient.setQueryData<Chat[]>(["chats"], (oldChats) =>
@@ -149,30 +165,25 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     // ── Message deleted ───────────────────────────────────────────
+    type InfData = { pages: Message[][]; pageParams: (string | undefined)[] };
     socket.on("message-deleted", ({ messageId, chatId }: { messageId: string; chatId: string }) => {
-      queryClient.setQueryData<Message[]>(["messages", chatId], (old) =>
-        old?.map((m) =>
-          m._id === messageId
-            ? { ...m, isDeleted: true, text: "This message was deleted" }
-            : m
-        )
+      queryClient.setQueryData<InfData>(["messages", chatId], (old) =>
+        old ? { ...old, pages: old.pages.map((page) =>
+          page.map((m) =>
+            m._id === messageId ? { ...m, isDeleted: true, text: "This message was deleted" } : m
+          )
+        )} : old
       );
     });
 
     // ── Message reaction ──────────────────────────────────────────
     socket.on(
       "message-reaction",
-      ({
-        messageId,
-        chatId,
-        reactions,
-      }: {
-        messageId: string;
-        chatId: string;
-        reactions: { emoji: string; userId: string }[];
-      }) => {
-        queryClient.setQueryData<Message[]>(["messages", chatId], (old) =>
-          old?.map((m) => (m._id === messageId ? { ...m, reactions } : m))
+      ({ messageId, chatId, reactions }: { messageId: string; chatId: string; reactions: { emoji: string; userId: string }[] }) => {
+        queryClient.setQueryData<InfData>(["messages", chatId], (old) =>
+          old ? { ...old, pages: old.pages.map((page) =>
+            page.map((m) => m._id === messageId ? { ...m, reactions } : m)
+          )} : old
         );
       }
     );
@@ -187,6 +198,24 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           else typingUsers.delete(chatId);
           return { typingUsers };
         });
+      }
+    );
+
+    // ── Read receipts ─────────────────────────────────────────────
+    // When the other person reads our messages, mark them as read in cache
+    socket.on(
+      "messages-read",
+      ({ chatId, readerId }: { chatId: string; readerId: string }) => {
+        queryClient.setQueryData<InfData>(["messages", chatId], (old) =>
+          old ? { ...old, pages: old.pages.map((page) =>
+            page.map((m) => ({
+              ...m,
+              readBy: m.readBy
+                ? m.readBy.includes(readerId) ? m.readBy : [...m.readBy, readerId]
+                : [readerId],
+            }))
+          )} : old
+        );
       }
     );
 
@@ -217,13 +246,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       sender: currentUser,
       text,
       replyTo,
+      readBy: [currentUser._id],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    queryClient.setQueryData<Message[]>(["messages", chatId], (old) => {
-      if (!old) return [optimisticMessage];
-      return [...old, optimisticMessage];
+    type InfData = { pages: Message[][]; pageParams: (string | undefined)[] };
+    queryClient.setQueryData<InfData>(["messages", chatId], (old) => {
+      if (!old) return { pages: [[optimisticMessage]], pageParams: [undefined] };
+      const lastPage = old.pages[old.pages.length - 1] ?? [];
+      return { ...old, pages: [...old.pages.slice(0, -1), [...lastPage, optimisticMessage]] };
     });
 
     socket.emit("send-message", { chatId, text, replyTo });
@@ -232,12 +264,40 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     const errorHandler = (error: { message: string }) => {
       Sentry.logger.error("Failed to send message", { chatId, error: error.message });
-      queryClient.setQueryData<Message[]>(["messages", chatId], (old) =>
-        old ? old.filter((m) => m._id !== tempId) : []
+      queryClient.setQueryData<InfData>(["messages", chatId], (old) =>
+        old ? { ...old, pages: old.pages.map((p) => p.filter((m) => m._id !== tempId)) } : old
       );
       socket.off("socket-error", errorHandler);
     };
     socket.once("socket-error", errorHandler);
+  },
+
+  sendMedia: (chatId, mediaUrl, mediaType, currentUser) => {
+    const { socket, queryClient } = get();
+    if (!socket?.connected || !queryClient) return;
+
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: Message = {
+      _id: tempId,
+      chat: chatId,
+      sender: currentUser,
+      text: "",
+      mediaUrl,
+      mediaType,
+      type: "media",
+      readBy: [currentUser._id],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    type InfDataMedia = { pages: Message[][]; pageParams: (string | undefined)[] };
+    queryClient.setQueryData<InfDataMedia>(["messages", chatId], (old) => {
+      if (!old) return { pages: [[optimisticMessage]], pageParams: [undefined] };
+      const lastPage = old.pages[old.pages.length - 1] ?? [];
+      return { ...old, pages: [...old.pages.slice(0, -1), [...lastPage, optimisticMessage]] };
+    });
+
+    socket.emit("send-message", { chatId, text: "", type: "media", mediaUrl, mediaType });
   },
 
   deleteMessage: (messageId, chatId, deleteFor) => {
@@ -248,6 +308,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   reactMessage: (messageId, chatId, emoji) => {
     const { socket } = get();
     socket?.emit("react-message", { messageId, chatId, emoji });
+  },
+
+  markRead: (chatId) => {
+    const { socket } = get();
+    if (socket?.connected) socket.emit("message-read", { chatId });
   },
 
   initiateCall: (recipientId, callType, callerName, callerAvatar) => {
