@@ -36,7 +36,7 @@ const queryClient = new QueryClient();
 
 export default Sentry.wrap(function RootLayout() {
   return (
-    <ClerkProvider tokenCache={tokenCache}>
+    <ClerkProvider publishableKey="pk_test_bGl0ZXJhdGUtZ29waGVyLTE4LmNsZXJrLmFjY291bnRzLmRldiQ" tokenCache={tokenCache}>
       <QueryClientProvider client={queryClient}>
         <AuthSync />
         <SocketConnection />
