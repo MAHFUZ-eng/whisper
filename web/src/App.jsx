@@ -463,6 +463,7 @@ function ChatApp() {
             <button className="ctx-action" onClick={() => setCtxMsg(null)}>Cancel</button>
           </div>
         </div>
+      )}
       {/* ── New Chat Modal ────────────────────────────────────────── */}
       {showNewChat && (
         <div className="ctx-overlay" onClick={() => setShowNewChat(false)} style={{ alignItems: 'center', justifyContent: 'center', padding: 20 }}>
