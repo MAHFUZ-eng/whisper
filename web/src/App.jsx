@@ -5,8 +5,8 @@ import { io } from 'socket.io-client';
 import axios from 'axios';
 import { format, isToday, isYesterday, isSameDay, formatDistanceToNow } from 'date-fns';
 
-const API = 'https://whisper-ijeje.sevalla.app/api';
-const SOCKET_URL = 'https://whisper-ijeje.sevalla.app';
+const API = 'https://whisper-ksqnn.sevalla.app/api';
+const SOCKET_URL = 'https://whisper-ksqnn.sevalla.app';
 const EMOJI_OPTIONS = ['❤️', '😂', '👍', '😮', '😢', '🔥'];
 
 // ── Helpers ───────────────────────────────────────────────────────
