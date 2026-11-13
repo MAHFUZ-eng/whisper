@@ -160,11 +160,19 @@ flowchart LR
 
 Scientific accuracy matters to us. CosmoSmriti is inspired by NASA's historical missions, records, imagery, and educational resources.
 
-**Official resources:**
+### 📡 Data Sources Used
+
+| Source | What we use it for |
+|---|---|
+| 🗺️ [**NASA Solar System Treks**](https://trek.nasa.gov/) | Moon Trek and Mars Trek WMTS tiles for the basemap (no authentication required) |
+| 🔭 [**api.nasa.gov**](https://api.nasa.gov/) | Mars Rover Photos for rover imagery, and APOD (Astronomy Picture of the Day) for hero images |
+| 🗄️ [**PDS Search API**](https://pds.nasa.gov/) and [**NSSDCA**](https://nssdc.gsfc.nasa.gov/) | Mission and spacecraft metadata with stable identifiers |
+| 📄 [**NTRS**](https://ntrs.nasa.gov/) (NASA Technical Reports Server) | Mission reports for dates and the science each object enabled |
+
+### 🔗 More Official Resources
 
 - 🚀 [NASA](https://www.nasa.gov/)
 - 🖼️ [NASA Image and Video Library](https://images.nasa.gov/)
-- 🗄️ [NASA Planetary Data System](https://pds.nasa.gov/)
 - 🔴 [NASA Mars Exploration](https://science.nasa.gov/mars/)
 - 🌕 [NASA Moon Exploration](https://science.nasa.gov/moon/)
 
